@@ -396,7 +396,7 @@ public:
 
 
   void set_bitpos(size_t pos) {
-    if (pos >= (static_cast<size_t>(_end - _data) * 8)) {
+    if (pos > (static_cast<size_t>(_end - _data) * 8)) {
       assert(0);
     }
 

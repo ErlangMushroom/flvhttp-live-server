@@ -11,13 +11,14 @@ behavior HttpSubscribe(HttpSubBroker* self,
   
     [=](sub_init_atom, const actor& publisher) {
       self->state.publisher = publisher;
-      //self->request(self->state.publisher, resync_atom::value);
+      //anon_send(self->state.publisher, resync_atom::value, self->address());
+      self->send(self->state.publisher, resync_atom::value, self->address());
     },
-/*
-    [=](read_resp_atom, const std::list<FlvPacket>& pkt) {
-      self->request(self->state.publisher, read_atom);
+
+    [=](read_resp_atom) {
+      cout << "read_resp_atom :\n";
     },
-*/
+
     [=](const connection_closed_msg& msg) {
       self->quit();
     }

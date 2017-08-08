@@ -40,7 +40,7 @@ behavior HttpMaster(HttpMasterBroker* self,
             auto worker = self->fork(HttpSubscribe, msg.handle, ctx->request.getBody());
             //send_as(worker, it->second, register_atom::value, worker);
             anon_send(it->second, register_atom::value, worker);
-            send_as(it->second, worker, sub_init_atom::value, it->second);
+            anon_send(worker, sub_init_atom::value, it->second);
           } else if (!state.upstream.empty()) {
             if (state.pendings.find(path) == std::end(state.pendings)) {
               state.pendings[path] = {msg.handle};

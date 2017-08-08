@@ -1,7 +1,7 @@
 #include "HttpPublish.hh"
+#include "HttpSubscribe.hh"
 
 behavior HttpPublish(HttpPubBroker* self,
-//behavior HttpPublish(HttpPubActor::stateful_pointer<HttpPubActor> self,
                      connection_handle hdl,
                      const std::vector<char>& residue) {
   self->write(hdl, arraySize(http_ok), http_ok);
@@ -10,13 +10,6 @@ behavior HttpPublish(HttpPubBroker* self,
     [=](const new_data_msg& msg) {
       self->configure_read(msg.handle, receive_policy::at_least(1024));
       self->state.parser.parse(msg.buf);
-      /*
-      cout << "in publish :\n";
-      for (auto& i : msg.buf) {
-        cout << i;
-      }
-      cout << endl;
-      */
     },
 
     [=](register_atom, const actor& subscriber) {
@@ -25,8 +18,9 @@ behavior HttpPublish(HttpPubBroker* self,
       self->link_to(subscriber);
     },
 
-    [=](resync_atom) {
+    [=](resync_atom, const actor_addr& subscriber) {
       cout << "resync_atom :\n";
+      self->send(actor_cast<actor>(subscriber), read_resp_atom::value);
     },
 
     [=](const connection_closed_msg& msg) {
