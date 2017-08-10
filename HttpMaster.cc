@@ -5,10 +5,24 @@
 behavior HttpMaster(HttpMasterBroker* self,
                     const std::string& up_stream_url) {
   self->state.upstream = up_stream_url;
+  self->set_down_handler([=](const down_msg& msg) {
+    printf("down_msg(%p)\n", self);
+    /*
+    auto brok = actor_cast<actor>(msg.source);
+    for (auto& i : brok.connections()) {
+      auto it = self->state.procs.find(i);
+      if (it != std::end(self->state.procs)) {
+        self->state.procs.erase(it);
+      }
+    }
+    */
+  });
+
   return {
     [=](const new_connection_msg& msg) {
+      cout << "new_connection_msg " << msg.handle.id() << endl;
       self->configure_read(msg.handle, receive_policy::at_most(1024));
-      
+
       auto it = self->state.procs.find(msg.handle);
       if (it == std::end(self->state.procs)) {
         std::shared_ptr<httpContext> ctx(new httpContext);
@@ -38,7 +52,7 @@ behavior HttpMaster(HttpMasterBroker* self,
           if (it != std::end(state.publishers)) {
             cout << "find pub in master\n";
             auto worker = self->fork(HttpSubscribe, msg.handle, ctx->request.getBody());
-            //send_as(worker, it->second, register_atom::value, worker);
+            self->monitor(worker);
             anon_send(it->second, register_atom::value, worker);
             anon_send(worker, sub_init_atom::value, it->second);
           } else if (!state.upstream.empty()) {
@@ -69,7 +83,6 @@ behavior HttpMaster(HttpMasterBroker* self,
         }
         ctx->status = httpContext::BODY;
       }
-      //cout << method << " : " << path << endl;
     },
 
     [=](const connection_closed_msg& msg) {
@@ -77,3 +90,5 @@ behavior HttpMaster(HttpMasterBroker* self,
     }
   };
 }
+
+

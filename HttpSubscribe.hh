@@ -6,6 +6,8 @@
 struct HttpSubState {
   abstract_broker* self;
   actor publisher;
+  connection_handle handle;
+  int64_t ts_base {-1};
 };
 
 using sub_init_atom = atom_constant<atom("sub_init")>;

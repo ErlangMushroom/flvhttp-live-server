@@ -32,22 +32,7 @@ struct membuf : std::streambuf {
     this->setg(vec.data(), vec.data(), vec.data() + vec.size());
   }
 };
-/*
-template <class T>
-struct Box {
-  T* val;
-};
 
-template <class T>
-Box<T> box(T* v) {
-  return Box<T>{v};
-}
-
-template <class T>
-const T* unbox(const Box<T>& b) {
-  return b.val;
-}
-*/
 namespace http {
 
 namespace detail {
@@ -270,21 +255,8 @@ struct byte_t {
                         size_t size);
 
   static byte_t* create(size_t size);
-
-  //DISABLE_NEW_AND_DEREF(byte_t);
-  //byte_t() = delete;
-  //~byte_t() = delete;
-  //operator *() = delete;
-};
-/*
-struct acquire_t {
-  void acquire();
 };
 
-class in_box_t : byte_t, acquire_t {
-
-}
-*/
 class byte_impl_t {
   friend class byte_t;
 private:

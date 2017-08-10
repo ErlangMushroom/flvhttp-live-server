@@ -23,7 +23,7 @@ struct DCR {
 struct FlvPacket {
   ssize_t  id {-1};
   packet_t type {NONE};
-  uint64_t dts {-1UL};
+  int64_t  dts {-1LL};
   int      key {0};
   byte_t*  payload {nullptr};
 };
@@ -35,14 +35,14 @@ struct InitPacket : public FlvPacket {
 
 class FlvPacketCache {
 public:
-  enum class ErrorCode : int8_t {
+  enum ErrorCode : int8_t {
     ERROR = -1,
     OK,
-    AGAIN,
     SKIP,
+    AGAIN
   };
 
-  enum class Mode : uint8_t {
+  enum Mode : uint8_t {
     NORMAL = 0,
     SKIP_B,
     SKIP_B_WITH_AUDIO,
@@ -56,13 +56,10 @@ public:
     : _maxSize(total) {
   }
 
-  size_t append(FlvPacket& pkt) {
+  ssize_t append(FlvPacket& pkt) {
     ssize_t id = _curId;
-    if (pkt.id == INVALID) {
-      pkt.id = _curId;
-    }
+    pkt.id = _curId;
 
-    _packets.push_back(pkt);
     if (pkt.type == VIDEO_DCR) {
       printf("video dcr\n");
       if (_videoDCR.payload) {
@@ -78,10 +75,13 @@ public:
       _audioDCR = pkt;
       return id;
     }
+
+    _packets.push_back(pkt);
     _curId++;
 
     if (id - _bottom > _maxSize) {
-      printf("pop front %zd\n", id);
+      auto pkt = _packets.front();
+      pkt.payload->release();
       _packets.pop_front();
       _bottom ++;
     }
@@ -92,17 +92,23 @@ public:
         _keyIds.pop_front();
       }
     }
-
-    switch (pkt.type) {
-      case VIDEO: _maxVideo = pkt.id; break;
-      case AUDIO: _maxAudio = pkt.id; break;
-      default: break;
-    }
-
     return id;
   }
 
-  ErrorCode getNext(const FlvPacket& in,
+  std::list<FlvPacket> getDCR() const {
+    std::list<FlvPacket> res;
+    if (_videoDCR.payload) {
+      _videoDCR.payload->acquire();
+      res.push_back(_videoDCR);
+    }
+    if (_audioDCR.payload) {
+      _audioDCR.payload->acquire();
+      res.push_back(_audioDCR);
+    }
+    return res;
+  }
+
+  ErrorCode getNext(ssize_t id,
                     FlvPacket& out,
                     Mode mode = Mode::NORMAL) const {
     BOOST_SCOPE_EXIT(&out) {
@@ -115,8 +121,8 @@ public:
       case Mode::I_ONLY: {
         auto it = std::find_if(_keyIds.begin(),
                                _keyIds.end(),
-                               [&] (size_t k) {
-                    return in.id < k;
+                               [=] (size_t k) {
+                    return id < k;
                   });
         if (it != std::end(_keyIds)) {
           out = _packets[*it - _bottom];
@@ -125,8 +131,8 @@ public:
         return ErrorCode::AGAIN;
       }
       case Mode::NORMAL: {
-        size_t next = in.id + 1;
-        if (next > _curId) {
+        ssize_t next = id + 1;
+        if (next >= _curId) {
           return ErrorCode::AGAIN;
         } else if (next < _bottom) {
           if (!_keyIds.empty()) {
@@ -152,9 +158,6 @@ private:
   const size_t _maxSize;
   ssize_t _curId {0};
   ssize_t _bottom {0};
-
-  ssize_t _maxAudio {INVALID};
-  ssize_t _maxVideo {INVALID};
 };
 
 class FlvParser {
@@ -404,26 +407,35 @@ private:
   size_t _cursize;
   FlvPacket _packet;
 };
+/*
+struct Packets : RefCounted<Packets> {
+  std::list<FlvPakcet> packets;
+  void emplace_back(FlvPacket pkt) {
+    packets.emplace_back(std::move(pkt));
+  }
+  template <class F>
+  void foreach(F&& fn) {
+    for (auto& i : packets) {
+      fn(i);
+    }
+  }
+};
+*/
+using FlvPacketList = std::list<FlvPacket>;
 
 struct HttpPubState {
   abstract_broker* self;
-  FlvPacketCache cache {2048};
+  FlvPacketCache cache {256};
   FlvParser parser {cache};
+  int nsubs {0};
 };
-
 
 using register_atom = atom_constant<atom("sub_reg")>;
 using resync_atom = atom_constant<atom("resync")>;
-/*
-using HttpPubActor = typed_actor<
-  reacts_to<register_atom, const actor&>,
-  replies_to<resync_atom>::with<const std::list<FlvPacket>&>
->;
-*/
+using read_some_atom = atom_constant<atom("read_some")>;
 
 using HttpPubBroker = caf::stateful_actor<HttpPubState, broker>;
 behavior HttpPublish(HttpPubBroker* self,
-//HttpPubActor::behavior_type HttpPublish(HttpPubActor::stateful_pointer<HttpPubActor> self,
                      connection_handle hdl,
                      const std::vector<char>& residue);
 
