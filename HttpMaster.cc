@@ -7,15 +7,6 @@ behavior HttpMaster(HttpMasterBroker* self,
   self->state.upstream = up_stream_url;
   self->set_down_handler([=](const down_msg& msg) {
     printf("down_msg(%p)\n", self);
-    /*
-    auto brok = actor_cast<actor>(msg.source);
-    for (auto& i : brok.connections()) {
-      auto it = self->state.procs.find(i);
-      if (it != std::end(self->state.procs)) {
-        self->state.procs.erase(it);
-      }
-    }
-    */
   });
 
   return {
@@ -43,14 +34,15 @@ behavior HttpMaster(HttpMasterBroker* self,
         } else if (res != 0) {
           return;
         }
-        
+
+        state.procs.erase(state.procs.find(msg.handle));
+
         auto method = ctx->request.getMethod();
         auto path = ctx->request.getPath();
         if (method == HTTP_GET) {
           cout << "HTTP_GET " << path << "\n";
           auto it = state.publishers.find(path);
           if (it != std::end(state.publishers)) {
-            cout << "find pub in master\n";
             auto worker = self->fork(HttpSubscribe, msg.handle, ctx->request.getBody());
             self->monitor(worker);
             anon_send(it->second, register_atom::value, worker);
