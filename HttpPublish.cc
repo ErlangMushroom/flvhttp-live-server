@@ -79,7 +79,17 @@ behavior HttpPublish(HttpPubBroker* self,
 
     [=](const connection_closed_msg& msg) {
       printf("connection_closed_msg(%p)\n", self);
-      self->quit();
+      self->delayed_send(self,
+                         std::chrono::seconds(3),
+                         delay_shut_atom::value,
+                         self->state.gen);
+    },
+
+    [=](delay_shut_atom, int gen) {
+      printf("delay_shut_atom(%p, %d)\n", self, gen);
+      if (self->state.gen == gen) {
+        self->quit();
+      }
     }
   };
 }

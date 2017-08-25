@@ -8,10 +8,10 @@ TARGET := http_actor
 SRCS := $(wildcard *.cc)
 OBJS := $(patsubst %.cc, %.o, $(SRCS))
 
-INCLUDE_FLAGS += -I../../../libcaf_core -I../../../libcaf_io
+INCLUDE_FLAGS += -I/home/matt/Work/source/cxx/awesome/actor-framework/libcaf_core -I/home/matt/Work/source/cxx/awesome/actor-framework/libcaf_io
 
 CXXFLAGS += -g -std=c++11 -O0 $(INCLUDE_FLAGS)
-LDFLAGS := -L../../lib
+LDFLAGS := -L/home/matt/Work/source/cxx/awesome/actor-framework/build/lib -L./http-parser
 
 all : $(TARGET)
 

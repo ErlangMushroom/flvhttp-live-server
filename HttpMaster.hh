@@ -2,6 +2,8 @@
 
 #include "utils.hh"
 #include "HttpPublish.hh"
+#include <boost/config.hpp>
+#include <boost/bimap.hpp>
 
 struct httpContext {
   http::Request request;
@@ -17,7 +19,7 @@ struct HttpMasterState {
   using PendingConnectionMap =
     std::unordered_map<std::string, std::list<connection_handle>>;
   using PublisherMap =
-    std::unordered_map<std::string, actor>;
+    boost::bimap<std::string, actor>;
   using RequestProcMap =
     std::unordered_map<connection_handle, std::shared_ptr<httpContext>>;
 

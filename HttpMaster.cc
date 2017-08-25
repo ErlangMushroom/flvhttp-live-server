@@ -7,6 +7,11 @@ behavior HttpMaster(HttpMasterBroker* self,
   self->state.upstream = up_stream_url;
   self->set_down_handler([=](const down_msg& msg) {
     printf("down_msg(%p)\n", self);
+    auto act = actor_cast<actor>(msg.source);
+    auto it = self->state.publishers.right.find(act);
+    if (it != std::end(self->state.publishers.right)) {
+      self->state.publishers.right.erase(it);
+    }
   });
 
   return {
@@ -16,15 +21,20 @@ behavior HttpMaster(HttpMasterBroker* self,
 
       auto it = self->state.procs.find(msg.handle);
       if (it == std::end(self->state.procs)) {
+        cout << "create new http context" << endl;
         std::shared_ptr<httpContext> ctx(new httpContext);
         ctx->status = httpContext::HEADER;
-        self->state.procs.insert(std::make_pair(msg.handle, ctx));
+        self->state.procs[msg.handle] = ctx;
       }
     },
 
     [=](const new_data_msg& msg) {
       auto& state = self->state;
       auto ctx = state.procs[msg.handle];
+      if (!ctx) {
+        cout << "Cannot find handle!" << endl;
+        return;
+      }
 
       if (ctx->status == httpContext::HEADER) {
         int res = ctx->request.parse(msg.buf);
@@ -41,8 +51,8 @@ behavior HttpMaster(HttpMasterBroker* self,
         auto path = ctx->request.getPath();
         if (method == HTTP_GET) {
           cout << "HTTP_GET " << path << "\n";
-          auto it = state.publishers.find(path);
-          if (it != std::end(state.publishers)) {
+          auto it = state.publishers.left.find(path);
+          if (it != std::end(state.publishers.left)) {
             auto worker = self->fork(HttpSubscribe, msg.handle, ctx->request.getBody());
             self->monitor(worker);
             anon_send(it->second, register_atom::value, worker);
@@ -57,20 +67,23 @@ behavior HttpMaster(HttpMasterBroker* self,
             //self->monitor(worker);
             //self->link_to(worker);
           } else {
-            self->write(msg.handle, arraySize(http_error), http_error);
-            self->quit();
+            self->write(msg.handle, strlen(http_error), http_error);
+            self->flush(msg.handle);
+            self->close(msg.handle);
           }
         } else if (method == HTTP_POST) {
           cout << "HTTP_POST " << path << "\n";
-          auto it = state.publishers.find(path);
-          if (it == std::end(state.publishers)) {
+          auto it = state.publishers.left.find(path);
+          if (it == std::end(state.publishers.left)) {
             auto worker = self->fork(HttpPublish, msg.handle, ctx->request.getBody());
-            state.publishers[path] = worker;
+            //state.publishers[path] = worker;
+            state.publishers.insert(HttpMasterState::PublisherMap::value_type(path, worker));
             self->monitor(worker);
             self->link_to(worker);
           } else {
-            self->write(msg.handle, arraySize(http_error), http_error);
-            self->quit();
+            self->write(msg.handle, strlen(http_error), http_error);
+            self->flush(msg.handle);
+            self->close(msg.handle);
           }
         }
         ctx->status = httpContext::BODY;
@@ -78,7 +91,7 @@ behavior HttpMaster(HttpMasterBroker* self,
     },
 
     [=](const connection_closed_msg& msg) {
-      self->quit();
+      //self->quit();
     }
   };
 }

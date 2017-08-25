@@ -18,7 +18,7 @@ constexpr char http_ok[] = "HTTP/1.1 200 OK\r\n"
                            "Connection: close\r\n"
                            "\r\n";
 
-constexpr char http_error[] = "HTTP/1.1 404 Not Found\r\n"
+constexpr char http_error[] = "HTTP/1.1 503 Service Unavailable\r\n"
                               "Connection: close\r\n"
                               "\r\n";
 
@@ -237,7 +237,7 @@ private:
   std::string _url;
   enum {
     NONE, HEADER_FIELD, HEADER_VALUE, HEADER_FINISH
-  } _status;
+  } _status {NONE};
 };
 
 }
