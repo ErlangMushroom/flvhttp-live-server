@@ -22,8 +22,8 @@ behavior HttpMaster(HttpMasterBroker* self,
       auto it = self->state.procs.find(msg.handle);
       if (it == std::end(self->state.procs)) {
         cout << "create new http context" << endl;
-        std::shared_ptr<httpContext> ctx(new httpContext);
-        ctx->status = httpContext::HEADER;
+        std::shared_ptr<HttpReqContext> ctx(new HttpReqContext);
+        ctx->status = HttpReqContext::HEADER;
         self->state.procs[msg.handle] = ctx;
       }
     },
@@ -36,36 +36,69 @@ behavior HttpMaster(HttpMasterBroker* self,
         return;
       }
 
-      if (ctx->status == httpContext::HEADER) {
+      if (ctx->status == HttpReqContext::HEADER) {
         int res = ctx->request.parse(msg.buf);
-        if (res < 0) {
-          cout << "Might get an invalid request!" << endl;
-          self->quit();
-        } else if (res != 0) {
+        if (res > 0) {
           return;
         }
 
         state.procs.erase(state.procs.find(msg.handle));
 
+        if (res < 0) {
+          cout << "Might get an invalid request!" << endl;
+          self->write(msg.handle, strlen(http_error), http_error);
+          self->flush(msg.handle);
+          self->close(msg.handle);
+          return;
+        }
+
         auto method = ctx->request.getMethod();
         auto path = ctx->request.getPath();
+        auto query = ctx->request.getQuery();
         if (method == HTTP_GET) {
           cout << "HTTP_GET " << path << "\n";
           auto it = state.publishers.left.find(path);
           if (it != std::end(state.publishers.left)) {
             auto worker = self->fork(HttpSubscribe, msg.handle, ctx->request.getBody());
-            self->monitor(worker);
+            //self->monitor(worker);
+            self->link_to(worker);
             anon_send(it->second, register_atom::value, worker);
             anon_send(worker, sub_init_atom::value, it->second);
           } else if (!state.upstream.empty()) {
-            if (state.pendings.find(path) == std::end(state.pendings)) {
-              state.pendings[path] = {msg.handle};
+            auto it = state.publishers.left.find(path);
+            if (it == std::end(state.publishers.left)) {
+              std::string res_path = path;
+              if (!query.empty()) {
+                res_path += "?" + query;
+              }
+              auto client =
+                self->parent().spawn_client(HttpRevPublish,
+                                            state.upstream,
+                                            8090,
+                                            res_path,
+                                            self->address());
+              if (client) {
+                self->monitor(*client);
+                self->link_to(*client);
+                state.publishers.insert(HttpMasterState::PublisherMap::value_type(path, *client));
+
+                auto worker = self->fork(HttpSubscribe, msg.handle, ctx->request.getBody());
+                //self->monitor(worker);
+                self->link_to(worker);
+                anon_send(*client, register_atom::value, worker);
+                anon_send(worker, sub_init_atom::value, *client);
+              } else {
+                self->write(msg.handle, strlen(http_error), http_error);
+                self->flush(msg.handle);
+                self->close(msg.handle);
+              }
             } else {
-              state.pendings[path].push_back(msg.handle);
+              auto worker = self->fork(HttpSubscribe, msg.handle, ctx->request.getBody());
+              self->monitor(worker);
+              self->link_to(worker);
+              anon_send(it->second, register_atom::value, worker);
+              anon_send(worker, sub_init_atom::value, it->second);
             }
-            //auto worker = self->fork(HttpRevPublish, msg.handle, box(self), state.upstream);
-            //self->monitor(worker);
-            //self->link_to(worker);
           } else {
             self->write(msg.handle, strlen(http_error), http_error);
             self->flush(msg.handle);
@@ -76,7 +109,6 @@ behavior HttpMaster(HttpMasterBroker* self,
           auto it = state.publishers.left.find(path);
           if (it == std::end(state.publishers.left)) {
             auto worker = self->fork(HttpPublish, msg.handle, ctx->request.getBody());
-            //state.publishers[path] = worker;
             state.publishers.insert(HttpMasterState::PublisherMap::value_type(path, worker));
             self->monitor(worker);
             self->link_to(worker);
@@ -86,7 +118,7 @@ behavior HttpMaster(HttpMasterBroker* self,
             self->close(msg.handle);
           }
         }
-        ctx->status = httpContext::BODY;
+        ctx->status = HttpReqContext::BODY;
       }
     },
 

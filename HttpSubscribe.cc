@@ -95,6 +95,14 @@ behavior HttpSubscribe(HttpSubBroker* self,
                          self->address());
     },
 
+    [=](eagain_atom) {
+      printf("eagain_atom(%p)\n", self);
+      self->delayed_send(self->state.publisher,
+                         std::chrono::milliseconds(200),
+                         resync_atom::value,
+                         self->address());
+    },
+
     [=](const connection_closed_msg& msg) {
       printf("connection_closed_msg(%p)\n", self);
       self->quit();

@@ -12,6 +12,7 @@ struct HttpSubState {
 
 using sub_init_atom = atom_constant<atom("sub_init")>;
 using read_resp_atom = atom_constant<atom("read_resp")>;
+using eagain_atom = atom_constant<atom("eagain")>;
 
 using HttpSubBroker = caf::stateful_actor<HttpSubState, broker>;
 behavior HttpSubscribe(HttpSubBroker* self,

@@ -1,9 +1,6 @@
 #include "HttpPublish.hh"
 #include "HttpSubscribe.hh"
 
-#define PACKET_IS_GOOD(e) ((e) == FlvPacketCache::ErrorCode::OK ||\
-                           (e) == FlvPacketCache::ErrorCode::SKIP)
-
 behavior HttpPublish(HttpPubBroker* self,
                      connection_handle hdl,
                      const std::vector<char>& residue) {

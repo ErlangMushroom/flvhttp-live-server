@@ -5,7 +5,7 @@
 #include <boost/config.hpp>
 #include <boost/bimap.hpp>
 
-struct httpContext {
+struct HttpReqContext {
   http::Request request;
   enum {
     NONE,
@@ -16,16 +16,13 @@ struct httpContext {
 };
 
 struct HttpMasterState {
-  using PendingConnectionMap =
-    std::unordered_map<std::string, std::list<connection_handle>>;
   using PublisherMap =
     boost::bimap<std::string, actor>;
   using RequestProcMap =
-    std::unordered_map<connection_handle, std::shared_ptr<httpContext>>;
+    std::unordered_map<connection_handle, std::shared_ptr<HttpReqContext>>;
 
   abstract_broker* self;
   std::string upstream {};
-  PendingConnectionMap pendings;
   PublisherMap publishers;
   RequestProcMap procs;
 };
