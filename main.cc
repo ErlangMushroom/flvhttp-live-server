@@ -28,13 +28,3 @@ void caf_main(actor_system& system, const config& cfg) {
 }
 
 CAF_MAIN(io::middleman)
-/*
-int main() {
-  uint8_t array[] = {0xf3, 0x35, 0x69, 0xab};
-  Bitstream bs(array);
-  bs.read(4);
-  uint32_t x = bs.read(2);
-  uint32_t y = bs.read(2);
-  printf("%u\n", x);
-}
-*/
