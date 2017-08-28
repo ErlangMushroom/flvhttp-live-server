@@ -389,6 +389,78 @@ private:
   } _status {NONE};
 };
 
+class UrlParser {
+public:
+  UrlParser(const std::string url)
+    : _url(url) {
+    http_parser_url_init(&_parser);
+  }
+
+  int parse() {
+    int res = http_parser_parse_url(_url.data(),
+                                    _url.size(),
+                                    0, &_parser);
+    if (res != 0) {
+      return res;
+    }
+
+#define SETUP_FIELD(m, f) \
+  if (_parser.field_set & (1 << (m))) { \
+    (f) = std::string( \
+      _url.data() + _parser.field_data[m].off, _parser.field_data[m].len); \
+  }
+
+  SETUP_FIELD(UF_SCHEMA,   _schema);
+  SETUP_FIELD(UF_HOST,     _host);
+  SETUP_FIELD(UF_PORT,     _port);
+  SETUP_FIELD(UF_PATH,     _path);
+  SETUP_FIELD(UF_QUERY,    _query);
+  SETUP_FIELD(UF_FRAGMENT, _fragment);
+  SETUP_FIELD(UF_USERINFO, _userinfo);
+
+#undef SETUP_FIELD
+  }
+
+  const std::string& getSchema() const {
+    return _schema;
+  }
+
+  const std::string& getHost() const {
+    return _host;
+  }
+
+  const std::string& getPort() const {
+    return _port;
+  }
+
+  const std::string& getPath() const {
+    return _path;
+  }
+
+  const std::string& getQuery() const {
+    return _query;
+  }
+
+  const std::string& getFragment() const {
+    return _fragment;
+  }
+
+  const std::string& getUserInfo() const {
+    return _userinfo;
+  }
+
+private:
+  http_parser_url _parser;
+  std::string _url;
+  std::string _schema;
+  std::string _host;
+  std::string _port;
+  std::string _path;
+  std::string _query;
+  std::string _fragment;
+  std::string _userinfo;
+};
+
 }
 
 

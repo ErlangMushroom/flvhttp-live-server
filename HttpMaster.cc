@@ -67,14 +67,24 @@ behavior HttpMaster(HttpMasterBroker* self,
           } else if (!state.upstream.empty()) {
             auto it = state.publishers.left.find(path);
             if (it == std::end(state.publishers.left)) {
+              http::UrlParser parser(state.upstream);
+              if (parser.parse() != 0) {
+                cout << "Upstream url parse failed!" << endl;
+                self->write(msg.handle, strlen(http_error), http_error);
+                self->flush(msg.handle);
+                self->close(msg.handle);
+                return;
+              }
+              auto host = parser.getHost();
+              auto port = std::stol(parser.getPort());
               std::string res_path = path;
               if (!query.empty()) {
                 res_path += "?" + query;
               }
               auto client =
                 self->parent().spawn_client(HttpRevPublish,
-                                            state.upstream,
-                                            8090,
+                                            host,
+                                            port,
                                             res_path,
                                             self->address());
               if (client) {
@@ -123,7 +133,8 @@ behavior HttpMaster(HttpMasterBroker* self,
     },
 
     [=](const connection_closed_msg& msg) {
-      //self->quit();
+      auto& procs = self->state.procs;
+      procs.erase(procs.find(msg.handle));
     }
   };
 }

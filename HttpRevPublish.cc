@@ -16,7 +16,7 @@ behavior HttpRevPublish(HttpRevPubBroker* self,
     printf("down_msg(%p)\n", self);
     if (--self->state.nsubs == 0) {
       self->delayed_send(self,
-                         std::chrono::seconds(3),
+                         std::chrono::seconds(5),
                          delay_shut_atom::value,
                          self->state.gen,
                          NO_MORE_SUBSCIRBER);
