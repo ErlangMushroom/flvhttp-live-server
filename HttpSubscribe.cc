@@ -14,6 +14,7 @@ behavior HttpSubscribe(HttpSubBroker* self,
                        connection_handle hdl,
                        const std::vector<char>& residue) {
   self->state.handle = hdl;
+  self->state.quiting = false;
   self->write(hdl, strlen(http_flv), http_flv);
   return {
     [=](const new_data_msg& msg) {
@@ -22,6 +23,10 @@ behavior HttpSubscribe(HttpSubBroker* self,
     [=](sub_init_atom, const actor& publisher) {
       printf("sub_init_atom(%p)\n", self);
       self->state.publisher = publisher;
+      if (self->state.quiting) {
+        self->quit();
+        return;
+      }
       self->send(self->state.publisher, 
                  resync_atom::value,
                  self->address());
@@ -29,6 +34,13 @@ behavior HttpSubscribe(HttpSubBroker* self,
 
     [=](read_resp_atom, int64_t some, bool resync) {
       //printf("read_resp_atom(%p)\n", self);
+      if (self->state.quiting) {
+        self->send(self->state.publisher,
+                   reclaim_atom::value,
+                   some);
+        self->quit();
+        return;
+      }
       if (resync) {
         char hdr_with_size[] = {
           0x46, 0x4c, 0x56, 0x01, 0x04 | 0x01,
@@ -96,6 +108,10 @@ behavior HttpSubscribe(HttpSubBroker* self,
     },
 
     [=](eagain_atom) {
+      if (self->state.quiting) {
+        self->quit();
+        return;
+      }
       printf("eagain_atom(%p)\n", self);
       self->delayed_send(self->state.publisher,
                          std::chrono::milliseconds(200),
@@ -105,7 +121,8 @@ behavior HttpSubscribe(HttpSubBroker* self,
 
     [=](const connection_closed_msg& msg) {
       printf("connection_closed_msg(%p)\n", self);
-      self->quit();
+      //self->quit();
+      self->state.quiting = true;
     }
   };
 }

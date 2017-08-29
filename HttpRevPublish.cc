@@ -131,6 +131,15 @@ behavior HttpRevPublish(HttpRevPubBroker* self,
                  false);
     },
 
+    [=](reclaim_atom, int64_t old) {
+      printf("reclaim_atom(%p)\n", self);
+      FlvPacketList* pkts = (FlvPacketList*)old;
+      for (auto& pkt : *pkts) {
+        pkt.payload->release();
+      }
+      delete pkts;
+    },
+
     [=](const connection_closed_msg& msg) {
       printf("connection_closed_msg(%p)\n", self);
       self->delayed_send(self,

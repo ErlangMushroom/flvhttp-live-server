@@ -61,6 +61,78 @@ namespace detail {
   };
 }
 
+class UrlParser {
+public:
+  UrlParser(const std::string& url)
+    : _url(url) {
+    http_parser_url_init(&_parser);
+  }
+
+  int parse() {
+    int res = http_parser_parse_url(_url.data(),
+                                    _url.size(),
+                                    0, &_parser);
+    if (res != 0) {
+      return res;
+    }
+
+#define SETUP_FIELD(m, f) \
+  if (_parser.field_set & (1 << (m))) { \
+    (f) = std::string( \
+      _url.data() + _parser.field_data[m].off, _parser.field_data[m].len); \
+  }
+  SETUP_FIELD(UF_SCHEMA,   _schema);
+  SETUP_FIELD(UF_HOST,     _host);
+  SETUP_FIELD(UF_PORT,     _port);
+  SETUP_FIELD(UF_PATH,     _path);
+  SETUP_FIELD(UF_QUERY,    _query);
+  SETUP_FIELD(UF_FRAGMENT, _fragment);
+  SETUP_FIELD(UF_USERINFO, _userinfo);
+#undef SETUP_FIELD
+
+    return 0;
+  }
+
+  const std::string& getSchema() const {
+    return _schema;
+  }
+
+  const std::string& getHost() const {
+    return _host;
+  }
+
+  const std::string& getPort() const {
+    return _port;
+  }
+
+  const std::string& getPath() const {
+    return _path;
+  }
+
+  const std::string& getQuery() const {
+    return _query;
+  }
+
+  const std::string& getFragment() const {
+    return _fragment;
+  }
+
+  const std::string& getUserInfo() const {
+    return _userinfo;
+  }
+
+private:
+  http_parser_url _parser;
+  std::string _url;
+  std::string _schema;
+  std::string _host;
+  std::string _port;
+  std::string _path;
+  std::string _query;
+  std::string _fragment;
+  std::string _userinfo;
+};
+
 class Request {
 public:
   using Method = http_method;
@@ -179,32 +251,15 @@ protected:
     self->_field.clear();
     self->_value.clear();
 
-    http_parser_url url;
-    http_parser_url_init(&url);
-    int parse_url =
-      http_parser_parse_url(self->_url.data(), self->_url.size(), 0, &url);
-
-    if (parse_url != 0) {
-      return parse_url;
+    int res = 0;
+    UrlParser parser(self->_url);
+    if ((res = parser.parse()) != 0) {
+      return res;
     }
 
-    if (url.field_set & (1 << UF_PATH)) {
-      self->_path = std::string(
-          self->_url.data() + url.field_data[UF_PATH].off,
-          url.field_data[UF_PATH].len);
-    }
-
-    if (url.field_set & (1 << UF_FRAGMENT)) {
-      self->_fragment = std::string(
-          self->_url.data() + url.field_data[UF_FRAGMENT].off,
-          url.field_data[UF_FRAGMENT].len);
-    }
-
-    if (url.field_set & (1 << UF_QUERY)) {
-      self->_query = std::string(
-          self->_url.data() + url.field_data[UF_QUERY].off,
-          url.field_data[UF_QUERY].len);
-    }
+    self->_path = parser.getPath();
+    self->_fragment = parser.getFragment();
+    self->_query = parser.getQuery();
 
     self->_status = HEADER_FINISH;
     return 0;
@@ -387,78 +442,6 @@ private:
   enum {
     NONE, HEADER_FIELD, HEADER_VALUE, HEADER_FINISH
   } _status {NONE};
-};
-
-class UrlParser {
-public:
-  UrlParser(const std::string url)
-    : _url(url) {
-    http_parser_url_init(&_parser);
-  }
-
-  int parse() {
-    int res = http_parser_parse_url(_url.data(),
-                                    _url.size(),
-                                    0, &_parser);
-    if (res != 0) {
-      return res;
-    }
-
-#define SETUP_FIELD(m, f) \
-  if (_parser.field_set & (1 << (m))) { \
-    (f) = std::string( \
-      _url.data() + _parser.field_data[m].off, _parser.field_data[m].len); \
-  }
-
-  SETUP_FIELD(UF_SCHEMA,   _schema);
-  SETUP_FIELD(UF_HOST,     _host);
-  SETUP_FIELD(UF_PORT,     _port);
-  SETUP_FIELD(UF_PATH,     _path);
-  SETUP_FIELD(UF_QUERY,    _query);
-  SETUP_FIELD(UF_FRAGMENT, _fragment);
-  SETUP_FIELD(UF_USERINFO, _userinfo);
-
-#undef SETUP_FIELD
-  }
-
-  const std::string& getSchema() const {
-    return _schema;
-  }
-
-  const std::string& getHost() const {
-    return _host;
-  }
-
-  const std::string& getPort() const {
-    return _port;
-  }
-
-  const std::string& getPath() const {
-    return _path;
-  }
-
-  const std::string& getQuery() const {
-    return _query;
-  }
-
-  const std::string& getFragment() const {
-    return _fragment;
-  }
-
-  const std::string& getUserInfo() const {
-    return _userinfo;
-  }
-
-private:
-  http_parser_url _parser;
-  std::string _url;
-  std::string _schema;
-  std::string _host;
-  std::string _port;
-  std::string _path;
-  std::string _query;
-  std::string _fragment;
-  std::string _userinfo;
 };
 
 }
@@ -660,6 +643,23 @@ public:
     : _maxSize(total) {
   }
 
+  ~FlvPacketCache() {
+    std::for_each(_packets.begin(),
+                  _packets.end(),
+                  [](const FlvPacket& pkt) {
+      if (pkt.payload) { 
+        pkt.payload->release();
+      }
+    });
+
+    if (_videoDCR.payload) {
+      _videoDCR.payload->release();
+    }
+    if (_audioDCR.payload) {
+      _audioDCR.payload->release();
+    }
+  }
+
   ssize_t append(FlvPacket& pkt) {
     ssize_t id = _curId;
     pkt.id = _curId;
@@ -766,73 +766,6 @@ private:
 
 class FlvParser {
 public:
-/*
-  struct FlvHeader {
-    uint8_t signature[3]; // flv file starts with first 3 bytes "FLV"
-    uint8_t version;      // version
-    uint8_t video : 1;    // whether has video
-    uint8_t       : 1;
-    uint8_t audio : 1;    // whether has audio
-    uint8_t       : 5;
-    uint32_t offset;      // flv's header length(version 1 should be always 9)
-  } __attribute__((packed));
-
-  struct FLVTagHeader {
-    uint8_t  type;
-    uint8_t  size[3];
-    uint8_t  ts[3];
-    uint8_t  ts_ext;
-    uint8_t  sid[3];
-  } __attribute__((packed));
-
-  struct AACData {
-    uint8_t* data;
-    uint32_t length;
-  } __attribute__((packed));
-
-  struct AAC {
-    uint8_t type;
-    union {
-      AudioSpecificConfig asc;
-      AACData dat;
-    };
-  } __attribute__((packed));
-
-  struct FlvAudioTagData {
-    uint8_t sound_typ  : 1;
-    uint8_t sound_size : 1;
-    uint8_t sound_rate : 2;
-    uint8_t sound_fmt  : 4;
-    union {
-      AAC aac;
-      uint8_t* other;
-    };
-  } __attribute__((packed));
-
-  struct AVCVideoPacket {
-    uint8_t  pkt_type;
-    uint24_t composition_time;
-    union {
-      AVCDecorderConfigurationRecord avc_dcr;
-      Nalu nalu;
-      uint8_t* data;
-    };
-  } __attribute__((packed));
-
-  struct FlvVideoTagData {
-    uint8_t codec_id   : 4;
-    uint8_t frame_type : 4;
-    AVCVideoPacket pkt;
-  } __attribute__((packed));
-
-  struct FlvTagData {
-    union {
-      amf::AMFData script;
-      FlvVideoTagData video;
-      FlvAudioTagData audio;
-    };
-  } __attribute__((packed));
-*/
   enum Status {
     HEADER, PREV_TAG_SIZE, TAG_HEADER, TAG_DATA
   };
@@ -1011,18 +944,5 @@ private:
   size_t _cursize;
   FlvPacket _packet;
 };
-/*
-struct Packets : RefCounted<Packets> {
-  std::list<FlvPakcet> packets;
-  void emplace_back(FlvPacket pkt) {
-    packets.emplace_back(std::move(pkt));
-  }
-  template <class F>
-  void foreach(F&& fn) {
-    for (auto& i : packets) {
-      fn(i);
-    }
-  }
-};
-*/
+
 using FlvPacketList = std::list<FlvPacket>;

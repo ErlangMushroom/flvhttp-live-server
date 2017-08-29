@@ -17,6 +17,7 @@ using register_atom = atom_constant<atom("sub_reg")>;
 using resync_atom = atom_constant<atom("resync")>;
 using read_some_atom = atom_constant<atom("read_some")>;
 using delay_shut_atom = atom_constant<atom("delay_shut")>;
+using reclaim_atom = atom_constant<atom("reclaim")>;
 
 using HttpPubBroker = caf::stateful_actor<HttpPubState, broker>;
 behavior HttpPublish(HttpPubBroker* self,

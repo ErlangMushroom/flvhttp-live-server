@@ -104,7 +104,7 @@ behavior HttpMaster(HttpMasterBroker* self,
               }
             } else {
               auto worker = self->fork(HttpSubscribe, msg.handle, ctx->request.getBody());
-              self->monitor(worker);
+              //self->monitor(worker);
               self->link_to(worker);
               anon_send(it->second, register_atom::value, worker);
               anon_send(worker, sub_init_atom::value, it->second);
