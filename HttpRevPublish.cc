@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2017 Maolin Liu <liu.matthews@gmail.com>.
+ * All Rights Reserved.
+ */
+
 #include "utils.hh"
 #include "HttpRevPublish.hh"
 #include "HttpPublish.hh"

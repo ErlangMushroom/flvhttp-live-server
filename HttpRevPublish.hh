@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2017 Maolin Liu <liu.matthews@gmail.com>.
+ * All Rights Reserved.
+ */
+
 #pragma once
 
 #include "utils.hh"

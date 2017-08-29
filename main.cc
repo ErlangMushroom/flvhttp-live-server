@@ -5,8 +5,8 @@
 
 class config : public actor_system_config {
 public:
-  uint16_t port = 0;
-  std::string up_stream_url {};
+  uint16_t port {0};
+  std::string up_stream_url;
 
   config() {
     opt_group{custom_options_, "publish"}

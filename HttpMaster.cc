@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2017 Maolin Liu <liu.matthews@gmail.com>.
+ * All Rights Reserved.
+ */
+
 #include "HttpMaster.hh"
 #include "HttpSubscribe.hh"
 #include "HttpRevPublish.hh"
@@ -65,49 +70,40 @@ behavior HttpMaster(HttpMasterBroker* self,
             anon_send(it->second, register_atom::value, worker);
             anon_send(worker, sub_init_atom::value, it->second);
           } else if (!state.upstream.empty()) {
-            auto it = state.publishers.left.find(path);
-            if (it == std::end(state.publishers.left)) {
-              http::UrlParser parser(state.upstream);
-              if (parser.parse() != 0) {
-                cout << "Upstream url parse failed!" << endl;
-                self->write(msg.handle, strlen(http_error), http_error);
-                self->flush(msg.handle);
-                self->close(msg.handle);
-                return;
-              }
-              auto host = parser.getHost();
-              auto port = std::stol(parser.getPort());
-              std::string res_path = path;
-              if (!query.empty()) {
-                res_path += "?" + query;
-              }
-              auto client =
-                self->parent().spawn_client(HttpRevPublish,
-                                            host,
-                                            port,
-                                            res_path,
-                                            self->address());
-              if (client) {
-                self->monitor(*client);
-                self->link_to(*client);
-                state.publishers.insert(HttpMasterState::PublisherMap::value_type(path, *client));
+            http::UrlParser parser(state.upstream);
+            if (parser.parse() != 0) {
+              cout << "Upstream url parse failed!" << endl;
+              self->write(msg.handle, strlen(http_error), http_error);
+              self->flush(msg.handle);
+              self->close(msg.handle);
+              return;
+            }
+            auto host = parser.getHost();
+            auto port = std::stol(parser.getPort());
+            std::string res_path = path;
+            if (!query.empty()) {
+              res_path += "?" + query;
+            }
+            auto client =
+              self->parent().spawn_client(HttpRevPublish,
+                                          host,
+                                          port,
+                                          res_path,
+                                          self->address());
+            if (client) {
+              self->monitor(*client);
+              self->link_to(*client);
+              state.publishers.insert(HttpMasterState::PublisherMap::value_type(path, *client));
 
-                auto worker = self->fork(HttpSubscribe, msg.handle, ctx->request.getBody());
-                //self->monitor(worker);
-                self->link_to(worker);
-                anon_send(*client, register_atom::value, worker);
-                anon_send(worker, sub_init_atom::value, *client);
-              } else {
-                self->write(msg.handle, strlen(http_error), http_error);
-                self->flush(msg.handle);
-                self->close(msg.handle);
-              }
-            } else {
               auto worker = self->fork(HttpSubscribe, msg.handle, ctx->request.getBody());
               //self->monitor(worker);
               self->link_to(worker);
-              anon_send(it->second, register_atom::value, worker);
-              anon_send(worker, sub_init_atom::value, it->second);
+              anon_send(*client, register_atom::value, worker);
+              anon_send(worker, sub_init_atom::value, *client);
+            } else {
+              self->write(msg.handle, strlen(http_error), http_error);
+              self->flush(msg.handle);
+              self->close(msg.handle);
             }
           } else {
             self->write(msg.handle, strlen(http_error), http_error);

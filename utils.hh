@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2017 Maolin Liu <liu.matthews@gmail.com>.
+ * All Rights Reserved.
+ */
+
 #pragma once
 
 #include "caf/all.hpp"
@@ -599,25 +604,12 @@ enum packet_t : uint8_t {
   SCRIPT
 };
 
-struct DCR {
-  //stream_t type;
-  union {
-    byte_t* videoDCR;
-    byte_t* audioDCR;
-  };
-};
-
 struct FlvPacket {
   ssize_t  id {-1};
   packet_t type {NONE};
   int64_t  dts {-1LL};
   int      key {0};
   byte_t*  payload {nullptr};
-};
-
-struct InitPacket : public FlvPacket {
-  byte_t* videoDCR {nullptr};
-  byte_t* audioDCR {nullptr};
 };
 
 class FlvPacketCache {
@@ -644,13 +636,11 @@ public:
   }
 
   ~FlvPacketCache() {
-    std::for_each(_packets.begin(),
-                  _packets.end(),
-                  [](const FlvPacket& pkt) {
+    for (auto& pkt : _packets) {
       if (pkt.payload) { 
         pkt.payload->release();
       }
-    });
+    }
 
     if (_videoDCR.payload) {
       _videoDCR.payload->release();
@@ -767,12 +757,16 @@ private:
 class FlvParser {
 public:
   enum Status {
-    HEADER, PREV_TAG_SIZE, TAG_HEADER, TAG_DATA
+    HEADER,
+    SKIP_OFFSET,
+    PREV_TAG_SIZE,
+    TAG_HEADER,
+    TAG_DATA
   };
 
   enum : ssize_t {
-    FLV_HEADER_SIZE = 9,
-    FLV_PREV_TAG_SIZE = 4,
+    FLV_HEADER_SIZE     = 9,
+    FLV_PREV_TAG_SIZE   = 4,
     FLV_TAG_HEADER_SIZE = 11
   };
 
@@ -802,7 +796,8 @@ public:
 
   FlvParser(FlvPacketCache& cache)
     : _cache(cache)
-    , _status(HEADER) {
+    , _status(HEADER)
+    , _skipSize(0) {
       _remain.reserve(FLV_HEADER_SIZE);
   }
 
@@ -819,7 +814,7 @@ public:
           ssize_t more = FLV_HEADER_SIZE - _remain.size();
           if (cur + more >= end) {
             std::copy(cur, end, std::back_inserter(_remain));
-            return 1;
+            return 0;
           } else {
             std::copy(cur, cur + more,
                       std::back_inserter(_remain));
@@ -836,16 +831,34 @@ public:
                    bs.skip(1);
           video  = bs.read(1);
           offset = bs.read(32);
-          _remain.clear();
-          _remain.reserve(4);
-          _status = PREV_TAG_SIZE;
+          if (offset > FLV_HEADER_SIZE) {
+            _skipSize = offset - FLV_HEADER_SIZE;
+            _status = SKIP_OFFSET;
+          } else {
+            _remain.clear();
+            _remain.reserve(FLV_PREV_TAG_SIZE);
+            _status = PREV_TAG_SIZE;
+          }
+          break;
+        }
+        case SKIP_OFFSET: {
+          if (cur + _skipSize >= end) {
+            _skipSize -= end - cur;
+            cur = end;
+          } else {
+            cur += _skipSize;
+            _skipSize = 0;
+            _remain.clear();
+            _remain.reserve(FLV_PREV_TAG_SIZE);
+            _status = PREV_TAG_SIZE;
+          }
           break;
         }
         case PREV_TAG_SIZE: {
           ssize_t more = FLV_PREV_TAG_SIZE - _remain.size();
           if (cur + more >= end) {
             std::copy(cur, end, std::back_inserter(_remain));
-            return 1;
+            return 0;
           } else {
             std::copy(cur, cur + more,
                       std::back_inserter(_remain));
@@ -853,8 +866,9 @@ public:
           }
 
           Bitstream bs(_remain);
-          bs.read(32);
+          bs.skip(32);
           _remain.clear();
+          _remain.reserve(FLV_TAG_HEADER_SIZE);
           _status = TAG_HEADER;
           break;
         }
@@ -862,7 +876,7 @@ public:
           ssize_t more = FLV_TAG_HEADER_SIZE - _remain.size();
           if (cur + more >= end) {
             std::copy(cur, end, std::back_inserter(_remain));
-            return 1;
+            return 0;
           } else {
             std::copy(cur, cur + more,
                       std::back_inserter(_remain));
@@ -895,8 +909,8 @@ public:
           if (more == 0) {
             if (_packet.type == AUDIO) {
               Bitstream bs((uint8_t*)_packet.payload, 2);
-                       bs.read(8);
-              int pt = bs.read(8);
+                           bs.skip(8);
+              uint8_t pt = bs.read(8);
               if (pt == SEQUENCE_HEADER) {
                 _packet.type = AUDIO_DCR;
               }
@@ -934,12 +948,15 @@ public:
         default: break;
       }
     }
+
+    return 0;
   }
 
 private:
   FlvPacketCache& _cache;
   Status _status;
   std::vector<uint8_t> _remain;
+  size_t _skipSize;
   size_t _tagsize;
   size_t _cursize;
   FlvPacket _packet;

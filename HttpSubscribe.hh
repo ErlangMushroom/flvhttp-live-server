@@ -1,10 +1,14 @@
+/**
+ * Copyright (C) 2017 Maolin Liu <liu.matthews@gmail.com>.
+ * All Rights Reserved.
+ */
+
 #pragma once
 
 #include "utils.hh"
 #include "HttpPublish.hh"
 
 struct HttpSubState {
-  abstract_broker* self;
   actor publisher;
   connection_handle handle;
   int64_t ts_base {-1};

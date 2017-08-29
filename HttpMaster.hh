@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2017 Maolin Liu <liu.matthews@gmail.com>.
+ * All Rights Reserved.
+ */
+
 #pragma once
 
 #include "utils.hh"
@@ -21,8 +26,7 @@ struct HttpMasterState {
   using RequestProcMap =
     std::unordered_map<connection_handle, std::shared_ptr<HttpReqContext>>;
 
-  abstract_broker* self;
-  std::string upstream {};
+  std::string upstream;
   PublisherMap publishers;
   RequestProcMap procs;
 };

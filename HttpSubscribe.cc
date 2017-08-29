@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2017 Maolin Liu <liu.matthews@gmail.com>.
+ * All Rights Reserved.
+ */
+
 #include "HttpSubscribe.hh"
 #include <chrono>
 #include <arpa/inet.h>
@@ -56,10 +61,10 @@ behavior HttpSubscribe(HttpSubBroker* self,
         uint8_t type;
         if (pkt.type == VIDEO ||
             pkt.type == VIDEO_DCR) {
-          type = 9;
+          type = FlvParser::TAG_VIDEO;
         } else if (pkt.type == AUDIO ||
                    pkt.type == AUDIO_DCR) {
-          type = 8;
+          type = FlvParser::TAG_AUDIO;
         } else {
           continue;
         }
